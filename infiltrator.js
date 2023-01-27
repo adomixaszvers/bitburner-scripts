@@ -225,6 +225,9 @@ async function infiltrateForFaction(ns, stack) {
 		}
 
 		log(ns, `Infiltrating ${stack.target.name} at loop ${loop} to push ${stack.faction}´s Reputation`);
+		let currentStats = `Faction ${stack.faction} rep ${formatNumberShort(currentReputation, 4)}/${formatNumberShort(highestRepAug, 4)}`;
+		log(ns, currentStats);
+		console.log(currentStats);
 		let completet = await infiltrate(ns, city, stack.target.name, stack.faction);
 		if (completet == true) {
 			loop++;
@@ -556,7 +559,7 @@ async function buildInfiltrationStack(ns, ignoreFaction = [], boostFaction = "",
 	// TODO: Export "augmentationData, (factionData), desiredAugs, dictFactionAugs" in facman?
 	await updateAugmentationData(ns, player, ignoreFaction);
 
-	const unownedAugs = Object.values(augmentationData).filter((aug) => !aug.owned || aug.name == strNF);
+	const unownedAugs = Object.values(augmentationData).filter((aug) => !aug.owned && aug.name != strNF);
 	let availableAugs = unownedAugs.filter((aug) => aug.getFromJoined() != null);
 
 	for (const aug of availableAugs) {
