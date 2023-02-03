@@ -70,6 +70,16 @@ export async function main(ns) {
             addHud("Scr Inc", formatMoney(ns.getTotalScriptIncome()[0], 3, 2) + '/sec', "Total 'instantenous' income per second being earned across all scripts running on all servers.");
             addHud("Scr Exp", formatNumberShort(ns.getTotalScriptExpGain(), 3, 2) + '/sec', "Total 'instantenous' hack experience per second being earned across all scripts running on all servers.");
 
+            // Show current infiltration
+            if (ns.isRunning('infiltrator.js', 'home')) {
+                const currentInfiltration = ns.read('/Temp/current-infiltration.txt');
+                if (currentInfiltration) {
+                    const data = JSON.parse(currentInfiltration);
+                    addHud("Boosting", data.faction, `Infiltrating target ${data.target} for faction ${data.faction} reputation`)
+                    addHud("Rep", `${formatNumberShort(data.currentReputation, 3)}/${formatNumberShort(data.highestRepAug, 3)}`);
+                }
+            }
+
             // Show reserved money
             const reserve = Number(ns.read("reserve.txt") || 0);
             if (reserve > 0) // Bitburner bug: Trace amounts of share power sometimes left over after we stop sharing

@@ -227,7 +227,12 @@ async function infiltrateForFaction(ns, stack) {
 		log(ns, `Infiltrating ${stack.target.name} at loop ${loop} to push ${stack.faction}´s Reputation`);
 		let currentStats = `Faction ${stack.faction} rep ${formatNumberShort(currentReputation, 4)}/${formatNumberShort(highestRepAug, 4)}`;
 		log(ns, currentStats);
-		console.log(currentStats);
+		ns.write('/Temp/current-infiltration.txt', JSON.stringify({
+			target: stack.target.name,
+			faction: stack.faction,
+			currentReputation: currentReputation,
+			highestRepAug: highestRepAug
+		}), 'w');
 		let completet = await infiltrate(ns, city, stack.target.name, stack.faction);
 		if (completet == true) {
 			loop++;
