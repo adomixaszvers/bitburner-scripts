@@ -10,9 +10,6 @@ import { formatMoney, formatNumberShort, getActiveSourceFiles } from './helpers.
 const mf = (n) => formatMoney(n, 6, 2);
 const nf = (n) => formatNumberShort(n, 3);
 const _ = globalThis._; // lodash
-/** @typedef {import('./index.js').NS} NS */
-/** @typedef {import('./index.js').Division} Division */
-/** @typedef {import('./index.js').CorporationInfo} CorporationInfo */
 
 // Global constants
 export const argsSchema = [
@@ -30,14 +27,14 @@ export const argsSchema = [
     ['mock', false], // Run the task assignment queue, but don't actually spend any money.
     ['price-discovery-only', false], // Don't do any auto-buying, just try to keep the sale price balanced as high as possible. (Emulating TA2 as best we can)
     ['first', 'Agriculture'], // What should we use for our first division? Agriculture works well, but others should be fine too.
-    ['second', 'RealEstate'], // What should we prefer for our second division? If we can't afford it, we'll buy what we can afford instead.
+    ['second', 'Real Estate'], // What should we prefer for our second division? If we can't afford it, we'll buy what we can afford instead.
 ];
 
 const desiredDivisions = 2; // One Material division to kickstart things, then a product division to really make money.
 
-const bonusMaterials = ['Hardware', 'Robots', 'AICores', 'RealEstate'];
-const materialSizes = { Water: 0.05, Energy: 0.01, Food: 0.03, Plants: 0.05, Metal: 0.1, Hardware: 0.06, Chemicals: 0.05, Drugs: 0.02, Robots: 0.5, AICores: 0.1, RealEstate: 0.005 };
-const allMaterials = ['Water', 'Energy', 'Food', 'Plants', 'Metal', 'Hardware', 'Chemicals', 'Drugs', 'Robots', 'AICores', 'RealEstate'];
+const bonusMaterials = ['Hardware', 'Robots', 'AI Cores', 'Real Estate'];
+const materialSizes = { Water: 0.05, Energy: 0.01, Food: 0.03, Plants: 0.05, Metal: 0.1, Hardware: 0.06, Chemicals: 0.05, Drugs: 0.02, Robots: 0.5, "AI Cores": 0.1, "Real Estate": 0.005 };
+const allMaterials = ['Water', 'Energy', 'Food', 'Plants', 'Metal', 'Hardware', 'Chemicals', 'Drugs', 'Robots', 'AI Cores', 'Real Estate'];
 // Map of material (by name) to their sizes (how much space it takes in warehouse)
 const unlocks = ['Export', 'Smart Supply', 'Market Research - Demand', 'Market Data - Competition', 'VeChain', 'Shady Accounting', 'Government Partnership', 'Warehouse API', 'Office API'];
 const upgrades = ['Smart Factories', 'Smart Storage', 'DreamSense', 'Wilson Analytics', 'Nuoptimal Nootropic Injector Implants', 'Speech Processor Implants', 'Neural Accelerators', 'FocusWires', 'ABC SalesBots', 'Project Insight'];
@@ -52,8 +49,8 @@ class Industry {
         this.factors = {
             Hardware: hwFac,
             Robots: robFac,
-            AICores: aiFac,
-            RealEstate: reFac,
+            "AI Cores": aiFac,
+            "Real Estate": reFac,
             Science: sciFac,
             Advertising: advFac,
         };
@@ -106,7 +103,7 @@ const industries = [
     Industry.fromObject({ name: 'Software', sciFac: 0.62, advFac: 0.16, hwFac: 0.25, reFac: 0.15, aiFac: 0.18, robFac: 0.05, reqMats: { Hardware: 0.5, Energy: 0.5 }, prodMats: ['AICores'], makesProducts: true, startupCost: 25e9 }),
     Industry.fromObject({ name: 'Pharmaceutical', reFac: 0.05, sciFac: 0.8, hwFac: 0.15, robFac: 0.25, aiFac: 0.2, advFac: 0.16, reqMats: { Chemicals: 2, Energy: 1, Water: 0.5 }, prodMats: ['Drugs'], makesProducts: true, startupCost: 200e9 }),
     Industry.fromObject({ name: 'Computer', reFac: 0.2, sciFac: 0.62, robFac: 0.36, aiFac: 0.19, advFac: 0.17, reqMats: { Metal: 2, Energy: 1 }, prodMats: ['Hardware'], makesProducts: true, startupCost: 500e9 }),
-    Industry.fromObject({ name: 'RealEstate', robFac: 0.6, aiFac: 0.6, advFac: 0.25, sciFac: 0.05, hwFac: 0.05, reqMats: { Metal: 5, Energy: 5, Water: 2, Hardware: 4 }, prodMats: ['RealEstate'], makesProducts: true, startupCost: 600e9 }),
+    Industry.fromObject({ name: 'Real Estate', robFac: 0.6, aiFac: 0.6, advFac: 0.25, sciFac: 0.05, hwFac: 0.05, reqMats: { Metal: 5, Energy: 5, Water: 2, Hardware: 4 }, prodMats: ['Real Estate'], makesProducts: true, startupCost: 600e9 }),
     Industry.fromObject({ name: 'Healthcare', reFac: 0.1, sciFac: 0.75, advFac: 0.11, hwFac: 0.1, robFac: 0.1, aiFac: 0.1, reqMats: { Robots: 10, AICores: 5, Energy: 5, Water: 5 }, makesProducts: true, startupCost: 750e9 }),
     Industry.fromObject({ name: 'Robotics', reFac: 0.32, sciFac: 0.65, aiFac: 0.36, advFac: 0.18, hwFac: 0.19, reqMats: { Hardware: 5, Energy: 3 }, prodMats: ['Robots'], makesProducts: true, startupCost: 1e12 }),
 ];
@@ -142,11 +139,10 @@ export async function main(ns) {
     }
 
     // See if we've already created a corporation.
-    let hasCorporation = false;
-    try {
+    const hasCorporation = ns.corporation.hasCorporation();
+    if (hasCorporation) {
         myCorporation = ns.corporation.getCorporation();
-        hasCorporation = true;
-    } catch {}
+    }
     // With SF 3.3, we start with access to the Warehouse and Office APIs. Without that, there's no way to set up a new Corp in any reasonable way.
     if (dictSourceFiles[3] >= 3 && !hasCorporation) {
         await doInitialCorporateSetup(ns);
@@ -158,7 +154,8 @@ export async function main(ns) {
 
     // If we already have a corporation, make sure we didn't leave any workers waiting for assignment.
     if (hasCorporation) {
-        for (const division of myCorporation.divisions) {
+        for (const divisionName of myCorporation.divisions) {
+            const division = ns.corporation.getDivision(divisionName);
             for (const city of division.cities) {
                 fillSpaceQueue.push(`${division.name}/${city}`);
             }
@@ -243,7 +240,8 @@ async function doManageCorporation(ns) {
     }
 
     let hasProductionDivision = false;
-    for (const division of myCorporation.divisions) {
+    for (const divisionName of myCorporation.divisions) {
+        const division = ns.corporation.getDivision(divisionName);
         let industry = industries.find((i) => i.name === division.type);
         if (industry.makesProducts) hasProductionDivision = true;
     }
@@ -344,7 +342,8 @@ async function doManageCorporation(ns) {
      * If we don't have all the automation bits, we may need to adjust pricing. If we have room in warehouses, we can buy
      * more materials. If we have products, we may be able to start on a new product. We may have research to spend.
      */
-    for (const division of myCorporation.divisions) {
+    for (const divisionName of myCorporation.divisions) {
+        const division = ns.corporation.getDivision(divisionName);
         // If we have multiple divisions, hold the lion's share of the budget for production industries.
         let industry = industries.find((ind) => ind.name === division.type);
         let divisionalBudget = budget;
@@ -363,7 +362,7 @@ async function doManageCorporation(ns) {
  */
 async function tryRaiseCapital(ns) {
     // First, spend hacknet hashes.
-    if (options['can-spend-hashes'] && myCorporation.funds < 10e9) 
+    if (options['can-spend-hashes'] && myCorporation.funds < 10e9)
         await doSpendHashes(ns, 'Sell for Corporation Funds');
     // If we're not public, then raise private funding.
     if (!myCorporation.public) {
@@ -384,9 +383,13 @@ async function tryRaiseCapital(ns) {
             }
 
             // Make sure we have filled a reasonable amount of our warehouses with materials.
-            for (const division of myCorporation.divisions) {
+            for (const divisionName of myCorporation.divisions) {
+                const division = ns.corporation.getDivision(divisionName);
                 let industry = industries.find((i) => i.name === division.type);
                 for (const city of division.cities) {
+                    if (!ns.corporation.hasWarehouse(divisionName, city)) {
+                        continue;
+                    }
                     let warehouse = ns.corporation.getWarehouse(division.name, city);
                     let warehouseSpaceRequiredForCycle = getReservedWarehouseSpace(ns, industry, division, city);
                     let warehouseSpaceAvailable = warehouse.size - warehouseSpaceRequiredForCycle - warehouse.sizeUsed;
@@ -400,7 +403,8 @@ async function tryRaiseCapital(ns) {
                 }
             }
             // If we have a product division, make sure it has a maximum number of products before we accept the offer.
-            for (const division of myCorporation.divisions) {
+            for (const divisionName of myCorporation.divisions) {
+                const division = ns.corporation.getDivision(divisionName);
                 const maxProducts = getMaxProducts(ns, division.name);
                 let industry = industries.find((i) => i.name === division.type);
                 if (industry.makesProducts && division.products.length < maxProducts) {
@@ -460,18 +464,33 @@ async function tryRaiseCapital(ns) {
  * @param {number} lowerLimit - minimum for all stats [0,1]
  * @returns {boolean}
  */
-function allEmployeesSatisfied(ns, lowerLimit = 0.9995) {
+function allEmployeesSatisfied(ns, lowerLimit = 0.8) {
     let allSatisfied = true;
-    for (const division of myCorporation.divisions) {
+    for (const divisionName of myCorporation.divisions) {
+        const division = ns.corporation.getDivision(divisionName);
         for (const city of division.cities) {
             let office = ns.corporation.getOffice(division.name, city);
-            let employees = office.employees.map((e) => ns.corporation.getEmployee(division.name, city, e));
-            let avgMorale = employees.map((e) => e.mor).reduce((sum, mor) => sum + mor, 0) / employees.length;
-            let avgEnergy = employees.map((e) => e.ene).reduce((sum, ene) => sum + ene, 0) / employees.length;
-            let avgHappiness = employees.map((e) => e.hap).reduce((sum, hap) => sum + hap, 0) / employees.length;
+            let avgMorale = office.avgMor;
+            let avgEnergy = office.avgEne;
+            let avgHappiness = office.avgHap;
             if (avgEnergy < office.maxEne * lowerLimit || avgHappiness < office.maxHap * lowerLimit || avgMorale < office.maxMor * lowerLimit) {
                 allSatisfied = false;
-                break;
+            }
+            if (avgEnergy < office.maxEne * lowerLimit && ns.corporation.getCorporation().funds > 0) {
+                log(ns, `Buying coffee for office division=${divisionName}, city=${city}`);
+                ns.corporation.buyCoffee(divisionName, city);
+            }
+            if (avgHappiness < office.maxHap * lowerLimit || avgMorale < office.maxMor * lowerLimit) {
+                const mult = Math.max(office.maxHap / avgHappiness, office.maxMor / avgMorale);
+                const costPerEnployee = (mult - 1) * 10e6;
+                const corp = ns.corporation.getCorporation();
+                const canSpendPerEmpoyee = corp.funds / office.employees;
+                if (canSpendPerEmpoyee > 0) {
+                    const perEmployee = Math.min(costPerEnployee, canSpendPerEmpoyee);
+                    log(ns, `Throwing party for office division=${divisionName}, city=${city}`);
+                    log(ns, `Cost per employee ${mf(perEmployee)}`);
+                    ns.corporation.throwParty(divisionName, city, perEmployee);
+                }
             }
         }
     }
@@ -595,7 +614,7 @@ async function doManageDivision(ns, division, budget) {
         // We aren't in all cities yet, so we want to expand.
         for (const city of cities) {
             if (!division.cities.includes(city)) {
-                let cost = ns.corporation.getExpandCityCost();
+                let cost = ns.corporation.getConstants().officeInitialCost;
                 if (cost < budget * 0.25) {
                     if (verbose) log(ns, `Want to open new offices in ${city}.`);
                     tasks.push(new Task(`Expand ${division.name} to ${city}`, () => doExpandCity(ns, division.name, city), cost, 80));
@@ -707,7 +726,7 @@ async function doManageDivision(ns, division, budget) {
         // Can we expand our warehouse space?
         if (!ns.corporation.hasWarehouse(division.name, city)) {
             // We don't have a warehouse here. We should try to buy one in this city.
-            cost = ns.corporation.getPurchaseWarehouseCost();
+            cost = ns.corporation.getConstants().warehouseInitialCost;
             if (cost < budget * 0.5) {
                 tasks.push(new Task(`Buy warehouse ${division.name}/${city}`, () => ns.corporation.purchaseWarehouse(division.name, city), cost, 80));
             }
@@ -762,7 +781,7 @@ async function doManageDivision(ns, division, budget) {
         // Calculate the required free space for a production cycle's worth of Material and products.
         let warehouseSpaceRequiredForCycle = getReservedWarehouseSpace(ns, industry, division, city);
 
-        // We don't want to drive the corp too deeply negative with material purchases too soon, or 
+        // We don't want to drive the corp too deeply negative with material purchases too soon, or
         // else nothing else will ever be bought, and employees will never get happy.
         let freeSpace = warehouse.size - warehouse.sizeUsed;
         let warehouseSpaceAvailable = freeSpace - warehouseSpaceRequiredForCycle;
@@ -989,18 +1008,15 @@ async function fillOpenPositionsFromQueue(ns) {
 async function fillOpenPositions(ns, divisionName, cityName) {
     if (options.mock) return;
     let office = ns.corporation.getOffice(divisionName, cityName);
-    let employees = office.employees.map((e) => ns.corporation.getEmployee(divisionName, cityName, e));
-    let numUnassigned = employees.filter((e) => e.pos === 'Unassigned').length;
-    let openJobs = office.size - office.employees.length;
+    let openJobs = office.size - office.employees;
     for (let i = 0; i < openJobs; i++) {
         ns.corporation.hireEmployee(divisionName, cityName);
     }
-    openJobs += numUnassigned;
     office = ns.corporation.getOffice(divisionName, cityName);
     if (openJobs > 0) {
         if (verbose) log(ns, `Assigning ${openJobs} new employees to work in ${divisionName}/${cityName}`);
-        let employeesPerJob = Math.floor(office.employees.length / jobs.length);
-        let employeesLeft = office.employees.length % jobs.length;
+        let employeesPerJob = Math.floor(office.employees / jobs.length);
+        let employeesLeft = office.employees % jobs.length;
         for (let i = 0; i < jobs.length; i++) {
             const job = jobs[i];
             let num = employeesPerJob;
@@ -1019,7 +1035,8 @@ async function doPriceDiscovery(ns) {
     if (verbose) log(ns, ``);
     if (verbose) log(ns, `Doing price discovery for products.`);
     myCorporation = ns.corporation.getCorporation();
-    for (const division of myCorporation.divisions) {
+    for (const divisionName of myCorporation.divisions) {
+        const division = ns.corporation.getDivision(divisionName);
         const industry = industries.find((i) => i.name === division.type);
         // If we have Market-TA.II researched, just let that work.
         let hasMarketTA2 = ns.corporation.hasResearched(division.name, 'Market-TA.II');

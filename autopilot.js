@@ -1,7 +1,7 @@
 import {
 	log, getFilePath, getConfiguration, instanceCount, getNsDataThroughFile, runCommand, waitForProcessToComplete,
 	getActiveSourceFiles, tryGetBitNodeMultipliers, getStocksValue, unEscapeArrayArgs,
-	formatMoney, formatDuration
+	formatMoney, formatDuration, scanAllServers
 } from './helpers.js'
 
 const persistentLog = "log.autopilot.txt";
@@ -114,7 +114,7 @@ async function startUp(ns) {
 			log(ns, `WARNING: This script requires SF4 (singularity) functions to assess purchasable augmentations ascend automatically. ` +
 				`Some functionality will be disabled and you'll have to manage working for factions, purchasing, and installing augmentations yourself.`, true);
 	} catch (err) {
-		if (unlockedSFs[4] || 0 == 3) throw err; // No idea why this failed, treat as temporary and allow auto-retry.		
+		if (unlockedSFs[4] || 0 == 3) throw err; // No idea why this failed, treat as temporary and allow auto-retry.
 		log(ns, `WARNING: You only have SF4 level ${unlockedSFs[4]}. Without level 3, some singularity functions will be ` +
 			`too expensive to run until you have bought a lot of home RAM.`, true);
 	}
@@ -170,12 +170,13 @@ async function mainLoop(ns) {
 	await checkOnRunningScripts(ns, player);
 	await maybeDoCasino(ns, player);
 	await maybeDoInfiltration(ns, player, stocksValue);
+	maybeRunCorporation(ns);
 	await maybeInstallAugmentations(ns, player);
 }
 
 /** Logic run periodically to if there is anything we can do to speed along earning a Daedalus invite
  * @param {NS} ns
- * @param {Player} player 
+ * @param {Player} player
  * @param {number} stocksValue
  **/
 async function checkOnDaedalusStatus(ns, player, stocksValue) {
@@ -210,7 +211,7 @@ async function checkOnDaedalusStatus(ns, player, stocksValue) {
 }
 
 /** Logic run periodically throughout the BN to see if we are ready to complete it.
- * @param {NS} ns 
+ * @param {NS} ns
  * @param {Player} player */
 async function checkIfBnIsComplete(ns, player) {
 	if (bnCompletionSuppressed) return true;
@@ -288,7 +289,7 @@ async function getRunningScripts(ns) {
 }
 
 /** Helper to get the first instance of a running script by name.
- * @param {NS} ns 
+ * @param {NS} ns
  * @param {ProcessInfo[]} [runningScripts] - (optional) Cached list of running scripts to avoid repeating this expensive request
  * @param {(value: ProcessInfo, index: number, array: ProcessInfo[]) => unknown} [filter=] - (optional) Filter the list of processes beyond just matching on the script name */
 function findScriptHelper(baseScriptName, runningScripts, filter = null) {
@@ -296,7 +297,7 @@ function findScriptHelper(baseScriptName, runningScripts, filter = null) {
 }
 
 /** Helper to kill a running script instance by name
- * @param {NS} ns 
+ * @param {NS} ns
  * @param {ProcessInfo[]} [runningScripts=] - (optional) Cached list of running scripts to avoid repeating this expensive request
  * @param {ProcessInfo} [processInfo=] - (optional) The process to kill, if we've already found it in advance */
 async function killScript(ns, baseScriptName, runningScripts = null, processInfo = null) {
@@ -310,7 +311,7 @@ async function killScript(ns, baseScriptName, runningScripts = null, processInfo
 }
 
 /** Logic to ensure scripts are running to progress the BN
- * @param {NS} ns 
+ * @param {NS} ns
  * @param {Player} player */
 async function checkOnRunningScripts(ns, player) {
 	if (lastScriptsCheck > Date.now() - options['interval-check-scripts']) return;
@@ -358,7 +359,7 @@ async function checkOnRunningScripts(ns, player) {
 		}
 	}
 
-	// Determine the arguments we want to run daemon.js with. We will either pass these directly, or through stanek.js if we're running it first.	
+	// Determine the arguments we want to run daemon.js with. We will either pass these directly, or through stanek.js if we're running it first.
 	const hackThreshold = options['high-hack-threshold']; // If player.skills.hacking level is about 8000, run in "start-tight" mode
 	const daemonArgs = (player.skills.hacking < hackThreshold || player.bitNodeN == 8) ? [] :
 		// Launch daemon in "looping" mode if we have sufficient hack level
@@ -433,7 +434,7 @@ async function checkOnRunningScripts(ns, player) {
 }
 
 /** Logic to steal 10b from the casino
- * @param {NS} ns 
+ * @param {NS} ns
  * @param {Player} player */
 async function maybeDoCasino(ns, player) {
 	if (ranCasino || options['disable-casino']) return;
@@ -478,15 +479,15 @@ async function maybeDoCasino(ns, player) {
 }
 
 /** Logic to do Infiltration
- * @param {NS} ns 
- * @param {Player} player 
+ * @param {NS} ns
+ * @param {Player} player
  * @param {number} stocksValue */
 async function maybeDoInfiltration(ns, player, stocksValue) {
 	if (!options['enable-Infiltration']) return;
 	// if casino is about to run then skip infiltrations
 	if (!(ranCasino || options['disable-casino'])) return;
 
-	if (player.money < 200000 && player.bitNodeN == 8) 
+	if (player.money < 200000 && player.bitNodeN == 8)
 		return log(ns, `INFO: Player money is to low (${player.money}) and in this Bitnode is Infiltration Money = 0, maybe do Casino?`);
 
 	if (lastInfiltration > Date.now() - (options['interval-check-scripts'] * 3)) return;
@@ -494,14 +495,14 @@ async function maybeDoInfiltration(ns, player, stocksValue) {
 
 	let infiltrator = findScriptHelper('infiltrator.js', await getRunningScripts(ns));
 	if (infiltrator) return
-	
+
 	if (!bitnodeMults) bitnodeMults = await tryGetBitNodeMultipliers(ns);
 
 	let pid = launchScriptHelper(ns, 'infiltrator.js', ['--info'], '', true);
 	if (pid) await waitForProcessToComplete(ns, pid);
 	let stack = ns.read("/Temp/infiltrator.txt")
 	if (!stack) {
-		stack =  null 
+		stack =  null
 	} else {
 		stack = JSON.parse(stack)
 	}
@@ -515,8 +516,22 @@ async function maybeDoInfiltration(ns, player, stocksValue) {
 	}
 }
 
+/** @param {NS} ns */
+function maybeRunCorporation(ns) {
+	let servers = scanAllServers(ns);
+	const scriptName = 'corporation.js';
+	let isRunning = servers.some(server => ns.scriptRunning(scriptName, server));
+	if (!isRunning) {
+		const scriptSize = ns.getScriptRam(scriptName, 'home');
+		const canRun = servers.some(server => scriptSize < ns.getServerMaxRam(server) - ns.getServerUsedRam(server));
+		if (canRun) {
+			launchScriptHelper(ns, 'run-corporation.js', []);
+		}
+	}
+}
+
 /** Retrieves the last faction manager output file, parses, and types it.
- * @param {NS} ns 
+ * @param {NS} ns
  * @returns {{ affordable_nf_count: number, affordable_augs: [string], owned_count: number, unowned_count: number, total_rep_cost: number, total_aug_cost: number }}
  */
 function getFactionManagerOutput(ns) {
@@ -525,7 +540,7 @@ function getFactionManagerOutput(ns) {
 }
 
 /** Logic to detect if it's a good time to install augmentations, and if so, do so
- * @param {NS} ns 
+ * @param {NS} ns
  * @param {Player} player */
 async function maybeInstallAugmentations(ns, player) {
 	if (!(4 in unlockedSFs)) {
@@ -619,7 +634,7 @@ async function maybeInstallAugmentations(ns, player) {
 }
 
 /** Logic to detect if we are close to a milestone and should postpone installing augmentations until it is hit
- * @param {NS} ns 
+ * @param {NS} ns
  * @param {Player} player
  * @param {{ affordable_nf_count: number, affordable_augs: [string], owned_count: number, unowned_count: number, total_rep_cost: number, total_aug_cost: number }} facmanOutput
 */
@@ -656,8 +671,8 @@ async function shouldDelayInstall(ns, player, facmanOutput) {
 }
 
 /** Consolidated logic for all the times we want to reserve money
- * @param {NS} ns 
- * @param {Player} player 
+ * @param {NS} ns
+ * @param {Player} player
  * @param {number} stocksValue
  */
 async function manageReservedMoney(ns, player, stocksValue) {
@@ -676,11 +691,11 @@ async function manageReservedMoney(ns, player, stocksValue) {
 	return currentReserve == reserve ? true : await ns.write("reserve.txt", reserve, "w"); // Reserve for stocks
 	// NOTE: After several iterations, I decided that the above is actually best to keep in all scenarios:
 	// - Casino.js ignores the reserve, so the above takes care of ensuring our casino seed money isn't spent
-	// - In low-income situations, stockmaster will be our best source of income. We invoke it such that it ignores 
+	// - In low-income situations, stockmaster will be our best source of income. We invoke it such that it ignores
 	//	 the global reserve, so this 8B is for stocks only. The 2B remaining is plenty to kickstart the rest.
-	// - Once high-hack/gang income is achieved, this 8B will not be missed anyway. 
+	// - Once high-hack/gang income is achieved, this 8B will not be missed anyway.
 	/*
-	if(!ranCasino) { // In practice, 
+	if(!ranCasino) { // In practice,
 		await ns.write("reserve.txt", 300000, "w"); // Prevent other scripts from spending our casino seed money
 		return moneyReserved = true;
 	}
@@ -691,7 +706,7 @@ async function manageReservedMoney(ns, player, stocksValue) {
 }
 
 /** Helper to launch a script and log whether if it succeeded or failed
- * @param {NS} ns 
+ * @param {NS} ns
  * @param {string} baseScriptName
  * @param {Array<string>} [args=]
  * @param {boolean} [convertFileName=]
@@ -711,7 +726,7 @@ async function manageReservedMoney(ns, player, stocksValue) {
 let lastStatusLog = ""; // The current or last-assigned long-term status (what this script is waiting to happen)
 
 /** Helper to set a global status and print it if it changes
- * @param {NS} ns 
+ * @param {NS} ns
  * @param {string} status
  * @param {string} [uniquePart=] */
 function setStatus(ns, status, uniquePart = null) {
@@ -722,7 +737,7 @@ function setStatus(ns, status, uniquePart = null) {
 }
 
 /** Append the specified text (with timestamp) to a persistent log in the home directory
- * @param {NS} ns 
+ * @param {NS} ns
  * @param {string} text */
 async function persist_log(ns, text) {
 	await ns.write(persistentLog, `${(new Date()).toISOString().substring(0, 19)} ${text}\n`, "a")

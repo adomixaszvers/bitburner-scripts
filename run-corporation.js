@@ -1,14 +1,13 @@
 import { argsSchema } from './corporation.js';
 import { formatRam, scanAllServers } from './helpers.js';
 
-/** @typedef {import('./index.js').NS} NS*/
+const scriptName = 'corporation.js';
 
 /**
  * Try to find a place to run our corporation script, copy it out there, and start it up.
  * @param {NS} ns
  */
 export async function main(ns) {
-	const scriptName = 'corporation.js';
 	const scriptDependencies = ['helpers.js'];
     const scriptSize = ns.getScriptRam(scriptName, 'home');
 
@@ -19,10 +18,15 @@ export async function main(ns) {
 
     if (servers.length > 0) {
         for (const hostname of servers) {
+            const runningScript = checkCorporationScript(ns, hostname);
+            if (runningScript) {
+                ns.tail(runningScript.pid);
+				ns.exit();
+            }
 			let freeRam = ns.getServerMaxRam(hostname) - ns.getServerUsedRam(hostname);
 			if (freeRam > scriptSize) {
-				await ns.scp(scriptName, hostname);
-				await ns.scp(scriptDependencies, hostname);
+				ns.scp(scriptName, hostname);
+				ns.scp(scriptDependencies, hostname);
 				let pid = ns.exec(scriptName, hostname, 1, ...ns.args);
 				ns.tail(pid);
 				ns.exit();
@@ -35,6 +39,19 @@ export async function main(ns) {
 
 function isFlaggedForDeletion(ns, hostname) {
     return hostname != 'home' && ns.fileExists('/Flags/deleting.txt', hostname);
+}
+
+/**
+ * Check if the corporation.js is running on hostname
+ * @param {NS} ns
+ * @param {string} hostname
+ * @returns {RunningScript | null}
+ */
+function checkCorporationScript(ns, hostname) {
+    if (!ns.scriptRunning(scriptName, hostname)) {
+        return null;
+    }
+    return ns.getRunningScript(scriptName, hostname);
 }
 
 export function autocomplete(data, _) {
