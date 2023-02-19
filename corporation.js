@@ -71,6 +71,14 @@ class Industry {
     static fromObject(obj) {
         return new Industry(obj.name, obj.robFac, obj.aiFac, obj.advFac, obj.sciFac, obj.hwFac, obj.reFac, obj.reqMats, obj.prodMats, obj.makesProducts, obj.startupCost);
     }
+
+    /** @param {CorpIndustryData} data
+     * @param {string} name
+     *  @return Industry
+     */
+    static fromCorpIndustryData(data, name) {
+        return new Industry(name, data.robotFactor, data.aiCoreFactor, data.advertisingFactor, data.scienceFactor, data.hardwareFactor, data.realEstateFactor, data.requiredMaterials, data.producedMaterials, data.producedMaterials.length > 0, data.startingCost);
+    }
 }
 class Task {
     /**
@@ -100,9 +108,9 @@ const industries = [
     //reFac is unique for 'Food' bc it diminishes greatly per city. Handle this separately in code?
     Industry.fromObject({ name: 'Food', sciFac: 0.12, hwFac: 0.15, robFac: 0.3, aiFac: 0.25, advFac: 0.25, reFac: 0.05, reqMats: { Food: 0.5, Water: 0.5, Energy: 0.2 }, makesProducts: true, startupCost: 10e9 }),
     Industry.fromObject({ name: 'Tobacco', reFac: 0.15, sciFac: 0.75, hwFac: 0.15, robFac: 0.2, aiFac: 0.15, advFac: 0.2, reqMats: { Plants: 1, Water: 0.2 }, makesProducts: true, startupCost: 20e9 }),
-    Industry.fromObject({ name: 'Software', sciFac: 0.62, advFac: 0.16, hwFac: 0.25, reFac: 0.15, aiFac: 0.18, robFac: 0.05, reqMats: { Hardware: 0.5, Energy: 0.5 }, prodMats: ['AICores'], makesProducts: true, startupCost: 25e9 }),
+    Industry.fromObject({ name: 'Software', sciFac: 0.62, advFac: 0.16, hwFac: 0.25, reFac: 0.15, aiFac: 0.18, robFac: 0.05, reqMats: { Hardware: 0.5, Energy: 0.5 }, prodMats: ['AI Cores'], makesProducts: true, startupCost: 25e9 }),
     Industry.fromObject({ name: 'Pharmaceutical', reFac: 0.05, sciFac: 0.8, hwFac: 0.15, robFac: 0.25, aiFac: 0.2, advFac: 0.16, reqMats: { Chemicals: 2, Energy: 1, Water: 0.5 }, prodMats: ['Drugs'], makesProducts: true, startupCost: 200e9 }),
-    Industry.fromObject({ name: 'Computer', reFac: 0.2, sciFac: 0.62, robFac: 0.36, aiFac: 0.19, advFac: 0.17, reqMats: { Metal: 2, Energy: 1 }, prodMats: ['Hardware'], makesProducts: true, startupCost: 500e9 }),
+    Industry.fromObject({ name: 'Computer Hardware', reFac: 0.2, sciFac: 0.62, robFac: 0.36, aiFac: 0.19, advFac: 0.17, reqMats: { Metal: 2, Energy: 1 }, prodMats: ['Hardware'], makesProducts: true, startupCost: 500e9 }),
     Industry.fromObject({ name: 'Real Estate', robFac: 0.6, aiFac: 0.6, advFac: 0.25, sciFac: 0.05, hwFac: 0.05, reqMats: { Metal: 5, Energy: 5, Water: 2, Hardware: 4 }, prodMats: ['Real Estate'], makesProducts: true, startupCost: 600e9 }),
     Industry.fromObject({ name: 'Healthcare', reFac: 0.1, sciFac: 0.75, advFac: 0.11, hwFac: 0.1, robFac: 0.1, aiFac: 0.1, reqMats: { Robots: 10, AICores: 5, Energy: 5, Water: 5 }, makesProducts: true, startupCost: 750e9 }),
     Industry.fromObject({ name: 'Robotics', reFac: 0.32, sciFac: 0.65, aiFac: 0.36, advFac: 0.18, hwFac: 0.19, reqMats: { Hardware: 5, Energy: 3 }, prodMats: ['Robots'], makesProducts: true, startupCost: 1e12 }),
@@ -464,7 +472,7 @@ async function tryRaiseCapital(ns) {
  * @param {number} lowerLimit - minimum for all stats [0,1]
  * @returns {boolean}
  */
-function allEmployeesSatisfied(ns, lowerLimit = 0.8) {
+function allEmployeesSatisfied(ns, lowerLimit = 0.95) {
     let allSatisfied = true;
     for (const divisionName of myCorporation.divisions) {
         const division = ns.corporation.getDivision(divisionName);
@@ -475,26 +483,49 @@ function allEmployeesSatisfied(ns, lowerLimit = 0.8) {
             let avgHappiness = office.avgHap;
             if (avgEnergy < office.maxEne * lowerLimit || avgHappiness < office.maxHap * lowerLimit || avgMorale < office.maxMor * lowerLimit) {
                 allSatisfied = false;
-            }
-            if (avgEnergy < office.maxEne * lowerLimit && ns.corporation.getCorporation().funds > 0) {
-                log(ns, `Buying coffee for office division=${divisionName}, city=${city}`);
-                ns.corporation.buyCoffee(divisionName, city);
-            }
-            if (avgHappiness < office.maxHap * lowerLimit || avgMorale < office.maxMor * lowerLimit) {
-                const mult = Math.max(office.maxHap / avgHappiness, office.maxMor / avgMorale);
-                const costPerEnployee = (mult - 1) * 10e6;
-                const corp = ns.corporation.getCorporation();
-                const canSpendPerEmpoyee = corp.funds / office.employees;
-                if (canSpendPerEmpoyee > 0) {
-                    const perEmployee = Math.min(costPerEnployee, canSpendPerEmpoyee);
-                    log(ns, `Throwing party for office division=${divisionName}, city=${city}`);
-                    log(ns, `Cost per employee ${mf(perEmployee)}`);
-                    ns.corporation.throwParty(divisionName, city, perEmployee);
-                }
+                break;
             }
         }
     }
     return allSatisfied;
+}
+
+/**
+ * Upkeep energy, morale and happiness of office employees
+ * @param {NS} ns
+ * @param {string} divisionName
+ * @param {string} city
+ * @param {number} budget
+ * @param {number} lowerLimit
+ * @returns [Task]
+ */
+function upkeepOffice(ns, divisionName, city, budget, lowerLimit = 0.95) {
+    const result = [];
+    if (budget <= 0) {
+        return result;
+    }
+    const office = ns.corporation.getOffice(divisionName, city);
+    const constants = ns.corporation.getConstants();
+    const employees = office.employees;
+    if (office.avgEne < office.maxEne * lowerLimit) {
+        const cost = employees * constants.coffeeCostPerEmployee;
+        result.push(new Task(`Buy coffee at division ${divisionName} in ${city}`, () => ns.corporation.buyCoffee(divisionName, city), cost, 70));
+    }
+    if (office.avgHap < office.maxHap * lowerLimit || office.avgMor < office.maxMor * lowerLimit) {
+        const mult = Math.max(office.maxHap / office.avgHap, office.maxMor / office.avgMor);
+        const shouldSpent = (mult - 1) * 10e6;
+        const canSpend = budget / employees;
+        let cost, costPerEmployee;
+        if (shouldSpent < canSpend) {
+            cost = shouldSpent * employees;
+            costPerEmployee = shouldSpent;
+        } else {
+            cost = budget;
+            costPerEmployee = canSpend;
+        }
+        result.push(new Task(`Throw party at division ${divisionName} in ${city}`, () => ns.corporation.throwParty(divisionName, city, costPerEmployee), cost, 70));
+    }
+    return result;
 }
 
 /**
@@ -537,7 +568,7 @@ async function doInitialCorporateSetup(ns) {
     let created = false;
     try {
         created = ns.corporation.createCorporation(options['corporation-name'], false);
-    } catch {}
+    } catch { }
     while (!created) {
         // No public corp, so try to self fund. Wait around until we have the money, if neccessary
         if (ns.getPlayer().money > 150e9) created = ns.corporation.createCorporation(options['corporation-name'], true);
@@ -622,6 +653,14 @@ async function doManageDivision(ns, division, budget) {
             }
         }
     }
+
+    for (const city of division.cities) {
+        const upkeepTasks = upkeepOffice(ns, division.name, city, budget);
+        if (upkeepTasks.length > 0) {
+            tasks.push(...upkeepTasks);
+        }
+    }
+
     // Go ahead and expand immediately, so we can buy other stuff for any new locations on this cycle.
     if (tasks.length > 0) {
         spent = await runTasks(ns, tasks, budget);
@@ -657,14 +696,15 @@ async function doManageDivision(ns, division, budget) {
         // Willing to spend in inverse proportion to how much stored science helps this product.
         researchToSpend = division.research * (1 - industry.factors.Science);
     }
-    let researchTypes = ['Hi-Tech R&D Laboratory', 'uPgrade: Fulcrum', 'uPgrade: Capacity.I', 'uPgrade: Capacity.II', 'Market-TA.I', 'Market-TA.II'];
+    const constants = ns.corporation.getConstants();
+    let researchTypes = industry.makesProducts ? constants.researchNames : constants.researchNamesBase;
     for (const researchType of researchTypes) {
         let hasResearch = false;
         let cost = Infinity;
         try {
             hasResearch = ns.corporation.hasResearched(division.name, researchType);
             cost = ns.corporation.getResearchCost(division.name, researchType);
-        } catch {}
+        } catch { }
         if (!hasResearch && researchToSpend >= cost) {
             log(ns, `INFO: Buying reasearch project ${researchType} for ${nf(cost)} research points.`, 'info');
             ns.corporation.research(division.name, researchType);
@@ -908,7 +948,7 @@ function createNewProduct(ns, division) {
             .map((p) => budgetFromProductName(p))
             .sort((a, b) => a - b)
             .reverse();
-    } catch (error) {}
+    } catch (error) { }
     if (spentOnProducts.length > 0) {
         // If our products weren't named correctly default to assuming they were 2b, 4b, 8b...
         wantToSpend = wantToSpend * Math.pow(2, spentOnProducts.length - 1);
@@ -1073,7 +1113,7 @@ async function doPriceDiscovery(ns) {
             try {
                 let sMult = sPrice.split('*')[1];
                 lastPriceMultiplier = Number.parseFloat(sMult);
-            } catch {}
+            } catch { }
             let votes = [];
             for (const city of division.cities) {
                 // Each city is going to "vote" for how they want the price to be manipulated.
