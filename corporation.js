@@ -28,6 +28,7 @@ export const argsSchema = [
     ['price-discovery-only', false], // Don't do any auto-buying, just try to keep the sale price balanced as high as possible. (Emulating TA2 as best we can)
     ['first', 'Agriculture'], // What should we use for our first division? Agriculture works well, but others should be fine too.
     ['second', 'Real Estate'], // What should we prefer for our second division? If we can't afford it, we'll buy what we can afford instead.
+    ['remove-products', false]
 ];
 
 const desiredDivisions = 2; // One Material division to kickstart things, then a product division to really make money.
@@ -571,7 +572,9 @@ async function doInitialCorporateSetup(ns) {
     } catch { }
     while (!created) {
         // No public corp, so try to self fund. Wait around until we have the money, if neccessary
-        if (ns.getPlayer().money > 150e9) created = ns.corporation.createCorporation(options['corporation-name'], true);
+        if (ns.getPlayer().money > 160e9) {
+            created = ns.corporation.createCorporation(options['corporation-name'], true);
+        }
         if (!created) await ns.sleep(100);
     }
     log(ns, `Founded corporation ${options['corporation-name']}!`, 'info', true);
@@ -964,6 +967,7 @@ function createNewProduct(ns, division) {
         // If we fail to create the product, just reserve the money we want to spend.
         log(ns, `Reserving budget of ${mf(wantToSpend)} for next product.`);
         extraReserve = wantToSpend;
+        // extraReserve = 0;
     }
     return spent;
 }

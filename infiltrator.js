@@ -194,6 +194,7 @@ export async function main(ns) {
 		let stock = options["stock"];
 		await infiltrateForMoney(ns, player, maxMoney, forceTarget, stock);
 	}
+	ns.closeTail();
 }
 
 /**
