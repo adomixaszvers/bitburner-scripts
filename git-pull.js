@@ -27,8 +27,8 @@ export async function main(ns) {
     options = ns.flags(argsSchema);
     // Once upon a time, the game API required folders to have a leading slash
     // As of 2.3.1, not only is this no longer needed, but it can break the game.
-    if (options.subfolder)
-        options.subfolder = trimSlash(options.subfolder); // Remove the leading slash
+    options.subfolder = options.subfolder ? trimSlash(options.subfolder) : // Remove leading slash from any user-specified folder
+        ns.getScriptName().substring(0, ns.getScriptName().lastIndexOf('/')); // Default to the current folder
     const baseUrl = `raw.githubusercontent.com/${options.github}/${options.repository}/${options.branch}/`;
     const filesToDownload = options['new-file'].concat(options.download.length > 0 ? options.download : await repositoryListing(ns));
     for (const localFilePath of filesToDownload) {
@@ -70,8 +70,8 @@ export function rewriteFileForSubfolder(ns, path) {
     let contents = ns.read(path);
     // Replace subfolder reference in helpers.js getFilePath:
     contents = contents.replace(`const subfolder = ''`, `const subfolder = '${options.subfolder}/'`);
-    // Replace any imports, which can't use getFilePath:
-    contents = contents.replace(/from '(\.\/)?(.*)'/g, `from '${pathJoin(options.subfolder, '$2')}'`);
+    // Replace any imports, which can't use getFilePath, but only if they don't specify a relative path (../)
+    contents = contents.replace(/from '(\.\/)?((?!\.\.\/).*)'/g, `from '${pathJoin(options.subfolder, '$2')}'`);
     ns.write(path, contents, 'w');
     return true;
 }
